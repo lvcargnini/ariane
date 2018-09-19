@@ -85,6 +85,7 @@ module dm_csrs #(
     logic        resp_queue_full;
     logic        resp_queue_empty;
     logic        resp_queue_push;
+    logic        resp_queue_pop;
     logic [31:0] resp_queue_data;
 
     localparam dm::dm_csr_t DataEnd = dm::dm_csr_t'((dm::Data0 + {4'b0, dm::DataCount}));
@@ -184,7 +185,7 @@ module dm_csrs #(
         command_d   = command_q;
         progbuf_d   = progbuf_q;
         data_d      = data_q;
-        sbcs_d      = sbcs_d;
+        sbcs_d      = sbcs_q;
         sbaddr_d    = sbaddress_i;
         sbdata_d    = sbdata_q;
 
@@ -426,6 +427,7 @@ module dm_csrs #(
         sbcs_d.sbaccess32           = 1'b0;
         sbcs_d.sbaccess16           = 1'b0;
         sbcs_d.sbaccess8            = 1'b0;
+        sbcs_d.sbaccess             = 1'b0;
     end
 
     // output multiplexer
@@ -444,8 +446,11 @@ module dm_csrs #(
     assign cmd_o      = command_q;
     assign progbuf_o  = progbuf_q;
     assign data_o     = data_q;
+
+    assign resp_queue_pop = dmi_resp_ready_i & ~resp_queue_empty;
+    
     // response FIFO
-    fifo #(
+    fifo_v2 #(
         .dtype            ( logic [31:0]         ),
         .DEPTH            ( 2                    )
     ) i_fifo (
@@ -460,7 +465,7 @@ module dm_csrs #(
         .data_i           ( resp_queue_data      ),
         .push_i           ( resp_queue_push      ),
         .data_o           ( dmi_resp_bits_data_o ),
-        .pop_i            ( dmi_resp_ready_i     )
+        .pop_i            ( resp_queue_pop       )
     );
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
