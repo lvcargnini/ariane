@@ -69,9 +69,9 @@ module mult (
     // ---------------------
     // Division
     // ---------------------
-    logic [5:0]  ff1_result; // holds the index of the last '1' (as the input operand is reversed)
-    logic        ff1_no_one; // no one was found by find first one
-    logic [63:0] ff1_input;  // input to find first one
+    logic [5:0]  lzc_result; // holds the index of the last '1' (as the input operand is reversed)
+    logic        lzc_no_one; // no one was found by find first one
+    logic [63:0] lzc_input;  // input to find first one
     logic [63:0] operand_b_rev, operand_b_rev_neg, operand_b_shift; // couple of different representations for the dividend
     logic [6:0]  div_shift;             // amount of which to shift to left
     logic        div_signed;            // should this operation be performed as a signed or unsigned division
@@ -95,7 +95,7 @@ module mult (
     endgenerate
     // negated reverse input operand, used for signed divisions
     assign operand_b_rev_neg = ~operand_b_rev;
-    assign ff1_input = (div_op_signed) ? operand_b_rev_neg : operand_b_rev;
+    assign lzc_input = (div_op_signed) ? operand_b_rev_neg : operand_b_rev;
 
     // prepare the input operands and control divider
     always_comb begin
@@ -139,19 +139,19 @@ module mult (
     end
 
     // ---------------------
-    // Find First one
+    // Leading Zero Counter
     // ---------------------
     // this unit is used to speed up the sequential division by shifting the dividend first
-    ff1 #(
-        .LEN         ( 64         )
-    ) i_ff1 (
-        .in_i        ( ff1_input  ), // signed = operand_b_rev_neg, unsigned operand_b_rev
-        .first_one_o ( ff1_result ),
-        .no_ones_o   ( ff1_no_one )
+    lzc #(
+        .WIDTH   ( 64         )
+    ) i_lzc (
+        .in_i    ( lzc_input  ), // signed = operand_b_rev_neg, unsigned operand_b_rev
+        .cnt_o   ( lzc_result ),
+        .empty_o ( lzc_no_one )
     );
 
     // if the dividend is all zero go for the full length
-    assign div_shift = ff1_no_one ? 7'd64 : ff1_result;
+    assign div_shift = lzc_no_one ? 7'd64 : lzc_result;
     // prepare dividend by shifting
     assign operand_b_shift = operand_b <<< div_shift;
 
@@ -437,14 +437,15 @@ module mul (
     // Pipeline register
     logic [TRANS_ID_BITS-1:0]   trans_id_q;
     logic                       mult_valid_q;
-    logic [63:0]                result_q;
+    fu_op                       operator_d, operator_q;
+    logic [127:0] mult_result_d, mult_result_q;
+
     // control registers
     logic                       sign_a, sign_b;
     logic                       mult_valid;
 
     // control signals
     assign mult_valid_o    = mult_valid_q;
-    assign result_o        = result_q;
     assign mult_trans_id_o = trans_id_q;
     assign mult_ready_o    = 1'b1;
 
@@ -472,28 +473,38 @@ module mul (
         end
     end
 
+   
+    // single stage version 
+    assign mult_result_d   = $signed({operand_a_i[63] & sign_a, operand_a_i}) * 
+                             $signed({operand_b_i[63] & sign_b, operand_b_i});
+
+    
+    assign operator_d = operator_i;                             
+    always_comb begin : p_selmux
+        unique case (operator_q)
+            MULH, MULHU, MULHSU: result_o = mult_result_q[127:64]; 
+            MULW:                result_o = sext32(mult_result_q[31:0]);
+            // MUL performs an XLEN-bit×XLEN-bit multiplication and places the lower XLEN bits in the destination register
+            default:             result_o = mult_result_q[63:0];// including MUL 
+        endcase
+    end    
+
     // -----------------------
     // Output pipeline register
     // -----------------------
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni) begin
-            mult_valid_q <= '0;
-            trans_id_q   <= '0;
-            result_q     <= '0;
-        end else begin
+            mult_valid_q    <= '0;
+            trans_id_q      <= '0;
+            operator_q      <=  MUL;
+            mult_result_q   <= '0;
+         end else begin
             // Input silencing
             trans_id_q   <= trans_id_i;
             // Output Register
-            mult_valid_q <= mult_valid;
-
-            case (operator_i)
-                // MUL performs an XLEN-bit×XLEN-bit multiplication and places the lower XLEN bits in the destination register
-                MUL:    result_q <= mult_result[63:0];
-                MULH:   result_q <= mult_result[127:64];
-                MULHU:  result_q <= mult_result[127:64];
-                MULHSU: result_q <= mult_result[127:64];
-                MULW:   result_q <= sext32(mult_result[31:0]);
-            endcase
-        end
+            mult_valid_q    <= mult_valid;
+            operator_q      <= operator_d;
+            mult_result_q   <= mult_result_d;
+         end
     end
 endmodule
