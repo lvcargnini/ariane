@@ -21,13 +21,13 @@
 module btb #(
     parameter int NR_ENTRIES = 8
 )(
-    input  logic               clk_i,           // Clock
-    input  logic               rst_ni,          // Asynchronous reset active low
-    input  logic               flush_i,         // flush the btb
+    input  logic                        clk_i,           // Clock
+    input  logic                        rst_ni,          // Asynchronous reset active low
+    input  logic                        flush_i,         // flush the btb
 
-    input  logic [63:0]        vpc_i,           // virtual PC from IF stage
-    input  btb_update_t        btb_update_i,    // update btb with this information
-    output btb_prediction_t    btb_prediction_o // prediction from btb
+    input  logic [63:0]                 vpc_i,           // virtual PC from IF stage
+    input  ariane_pkg::btb_update_t     btb_update_i,    // update btb with this information
+    output ariane_pkg::btb_prediction_t btb_prediction_o // prediction from btb
 );
     // number of bits which are not used for indexing
     localparam OFFSET = 1; // we are using compressed instructions so do use the lower 2 bits for prediction
@@ -36,7 +36,7 @@ module btb #(
     localparam PREDICTION_BITS = $clog2(NR_ENTRIES) + OFFSET;
     // typedef for all branch target entries
     // we may want to try to put a tag field that fills the rest of the PC in-order to mitigate aliasing effects
-    btb_prediction_t btb_d [NR_ENTRIES-1:0], btb_q [NR_ENTRIES-1:0];
+    ariane_pkg::btb_prediction_t btb_d [NR_ENTRIES-1:0], btb_q [NR_ENTRIES-1:0];
     logic [$clog2(NR_ENTRIES)-1:0]          index, update_pc;
 
     assign index     = vpc_i[PREDICTION_BITS - 1:OFFSET];

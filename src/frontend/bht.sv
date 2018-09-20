@@ -16,12 +16,12 @@
 module bht #(
     parameter int unsigned NR_ENTRIES = 1024
 )(
-    input  logic            clk_i,
-    input  logic            rst_ni,
-    input  logic            flush_i,
-    input  logic [63:0]     vpc_i,
-    input  bht_update_t     bht_update_i,
-    output bht_prediction_t bht_prediction_o
+    input  logic                        clk_i,
+    input  logic                        rst_ni,
+    input  logic                        flush_i,
+    input  logic [63:0]                 vpc_i,
+    input  ariane_pkg::bht_update_t     bht_update_i,
+    output ariane_pkg::bht_prediction_t bht_prediction_o
 );
     localparam OFFSET = 2; // we are using compressed instructions so do not use the lower 2 bits for prediction
     localparam ANTIALIAS_BITS = 8;

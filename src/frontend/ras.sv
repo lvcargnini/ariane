@@ -17,15 +17,15 @@
 module ras #(
     parameter int unsigned DEPTH = 2
 )(
-    input  logic        clk_i,
-    input  logic        rst_ni,
-    input  logic        push_i,
-    input  logic        pop_i,
-    input  logic [63:0] data_i,
-    output ras_t        data_o
+    input  logic             clk_i,
+    input  logic             rst_ni,
+    input  logic             push_i,
+    input  logic             pop_i,
+    input  logic [63:0]      data_i,
+    output ariane_pkg::ras_t data_o
 );
 
-    ras_t [DEPTH-1:0] stack_d, stack_q;
+    ariane_pkg::ras_t [DEPTH-1:0] stack_d, stack_q;
 
     assign data_o = stack_q[0];
 

@@ -372,7 +372,6 @@ module frontend (
     // -------------------
     // Credit-based fetch FIFO flow ctrl
     // -------------------
-
     assign fifo_credits_d       =  (flush_i) ? FETCH_FIFO_DEPTH :
                                                fifo_credits_q + fifo_pop + s2_eff_kill - issue_req;
 
@@ -391,7 +390,6 @@ module frontend (
     assign if_ready            =  icache_dreq_i.ready & fifo_ready;
     assign icache_dreq_o.req   =  fifo_ready;
     assign fetch_entry_valid_o = ~fifo_empty;
-
 
 //pragma translate_off
 `ifndef VERILATOR
@@ -483,24 +481,22 @@ module frontend (
         );
     end
 
-fifo_v2 #(
-    .DEPTH        (  8                   ),
-    .dtype        ( fetch_entry_t        ))
-i_fetch_fifo (
-    .clk_i       ( clk_i                 ),
-    .rst_ni      ( rst_ni                ),
-    .flush_i     ( flush_i               ),
-    .testmode_i  ( 1'b0                  ),
-    .full_o      (                       ),
-    .empty_o     ( fifo_empty            ),
-    .alm_full_o  (                       ),
-    .alm_empty_o (                       ),
-    .data_i      ( {icache_vaddr_q, icache_data_q, bp_sbe, icache_ex_q} ),
-    .push_i      ( fifo_valid            ),
-    .data_o      ( fetch_entry_o         ),
-    .pop_i       ( fifo_pop              )
-);
-
-
+    fifo_v2 #(
+        .DEPTH        (  8                   ),
+        .dtype        ( fetch_entry_t        ))
+    i_fetch_fifo (
+        .clk_i       ( clk_i                 ),
+        .rst_ni      ( rst_ni                ),
+        .flush_i     ( flush_i               ),
+        .testmode_i  ( 1'b0                  ),
+        .full_o      (                       ),
+        .empty_o     ( fifo_empty            ),
+        .alm_full_o  (                       ),
+        .alm_empty_o (                       ),
+        .data_i      ( {icache_vaddr_q, icache_data_q, bp_sbe, icache_ex_q} ),
+        .push_i      ( fifo_valid            ),
+        .data_o      ( fetch_entry_o         ),
+        .pop_i       ( fifo_pop              )
+    );
 
 endmodule
