@@ -16,7 +16,7 @@ import ariane_pkg::*;
 import std_cache_pkg::*;
 
 module std_nbdcache #(
-        parameter logic [63:0] CACHE_START_ADDR = 64'h4000_0000
+    parameter logic [63:0] CACHE_START_ADDR = 64'h8000_0000
 )(
     input  logic                           clk_i,       // Clock
     input  logic                           rst_ni,      // Asynchronous reset active low
@@ -24,19 +24,18 @@ module std_nbdcache #(
     input  logic                           enable_i,    // from CSR
     input  logic                           flush_i,     // high until acknowledged
     output logic                           flush_ack_o, // send a single cycle acknowledge signal when the cache is flushed
-    output logic                           miss_o,      // we missed on a ld/st
-    // AMO interface
-    input  logic                           amo_commit_i, // commit atomic memory operation
-    output logic                           amo_valid_o,  // we have a valid AMO result
-    output logic [63:0]                    amo_result_o, // result of atomic memory operation
-    input  logic                           amo_flush_i,  // forget about AMO
+    output logic                           miss_o,      // we missed on a LD/ST
+    // AMOs
+    input  amo_req_t                       amo_req_i,
+    output amo_resp_t                      amo_resp_o,
     // Request ports
     input  dcache_req_i_t [2:0]            req_ports_i,  // request ports
-    output dcache_req_o_t [2:0]            req_ports_o,  // request ports 
-
+    output dcache_req_o_t [2:0]            req_ports_o,  // request ports
     // Cache AXI refill port
-    AXI_BUS.Master                         data_if,
-    AXI_BUS.Master                         bypass_if
+    output ariane_axi::req_t               axi_data_o,
+    input  ariane_axi::resp_t              axi_data_i,
+    output ariane_axi::req_t               axi_bypass_o,
+    input  ariane_axi::resp_t              axi_bypass_i
 );
 
     // -------------------------------
@@ -92,13 +91,11 @@ module std_nbdcache #(
                 .CACHE_START_ADDR      ( CACHE_START_ADDR     )
             ) i_cache_ctrl (
                 .bypass_i              ( ~enable_i            ),
-
                 .busy_o                ( busy            [i]  ),
-
+                // from core
                 .req_port_i            ( req_ports_i     [i]  ),
                 .req_port_o            ( req_ports_o     [i]  ),
-
-
+                // to SRAM array
                 .req_o                 ( req            [i+1] ),
                 .addr_o                ( addr           [i+1] ),
                 .gnt_i                 ( gnt            [i+1] ),
@@ -118,9 +115,9 @@ module std_nbdcache #(
                 .bypass_valid_i        ( bypass_valid    [i]  ),
                 .bypass_data_i         ( bypass_data     [i]  ),
 
-                .mshr_addr_o           ( mshr_addr         [i] ), // TODO
-                .mshr_addr_matches_i   ( mshr_addr_matches [i] ), // TODO
-                .mshr_index_matches_i  ( mshr_index_matches[i] ), // TODO
+                .mshr_addr_o           ( mshr_addr         [i] ),
+                .mshr_addr_matches_i   ( mshr_addr_matches [i] ),
+                .mshr_index_matches_i  ( mshr_index_matches[i] ),
                 .*
             );
         end
@@ -132,7 +129,11 @@ module std_nbdcache #(
     miss_handler #(
         .NR_PORTS               ( 3                    )
     ) i_miss_handler (
+        .flush_i                ( flush_i              ),
         .busy_i                 ( |busy                ),
+        // AMOs
+        .amo_req_i              ( amo_req_i            ),
+        .amo_resp_o             ( amo_resp_o           ),
         .miss_req_i             ( miss_req             ),
         .miss_gnt_o             ( miss_gnt             ),
         .bypass_gnt_o           ( bypass_gnt           ),
@@ -150,6 +151,10 @@ module std_nbdcache #(
         .be_o                   ( be              [0]  ),
         .data_o                 ( wdata           [0]  ),
         .we_o                   ( we              [0]  ),
+        .axi_bypass_o,
+        .axi_bypass_i,
+        .axi_data_o,
+        .axi_data_i,
         .*
     );
 
@@ -194,7 +199,7 @@ module std_nbdcache #(
     // ----------------
 
     // align each valid/dirty bit pair to a byte boundary in order to leverage byte enable signals.
-    // note: if you have an SRAM that supports flat bit enables for your target technology, 
+    // note: if you have an SRAM that supports flat bit enables for your target technology,
     // you can use it here to save the extra 4x overhead introduced by this workaround.
     logic [4*DCACHE_DIRTY_WIDTH-1:0] dirty_wdata, dirty_rdata;
 
@@ -247,105 +252,10 @@ module std_nbdcache #(
     );
 
 
-`ifndef SYNTHESIS
+//pragma translate_off
     initial begin
-        assert ($bits(data_if.aw_addr) == 64) else $fatal(1, "Ariane needs a 64-bit bus");
+        assert ($bits(axi_data_o.aw.addr) == 64) else $fatal(1, "Ariane needs a 64-bit bus");
         assert (DCACHE_LINE_WIDTH/64 inside {2, 4, 8, 16}) else $fatal(1, "Cache line size needs to be a power of two multiple of 64");
     end
-`endif
-endmodule
-
-// --------------
-// Tag Compare
-// --------------
-//
-// Description: Arbitrates access to cache memories, simplified request grant protocol
-//              checks for hit or miss on cache
-//
-module tag_cmp #(
-        parameter int unsigned NR_PORTS          = 3,
-        parameter int unsigned ADDR_WIDTH        = 64,
-        parameter type data_t                    = cache_line_t,
-        parameter type be_t                      = cl_be_t,
-        parameter int unsigned DCACHE_SET_ASSOC = 8
-    )(
-        input  logic                                         clk_i,
-        input  logic                                         rst_ni,
-
-        input  logic  [NR_PORTS-1:0][DCACHE_SET_ASSOC-1:0]   req_i,
-        output logic  [NR_PORTS-1:0]                         gnt_o,
-        input  logic  [NR_PORTS-1:0][ADDR_WIDTH-1:0]         addr_i,
-        input  data_t [NR_PORTS-1:0]                         wdata_i,
-        input  logic  [NR_PORTS-1:0]                         we_i,
-        input  be_t   [NR_PORTS-1:0]                         be_i,
-        output data_t               [DCACHE_SET_ASSOC-1:0]   rdata_o,
-        input  logic  [NR_PORTS-1:0][DCACHE_TAG_WIDTH-1:0]   tag_i, // tag in - comes one cycle later
-        output logic                [DCACHE_SET_ASSOC-1:0]   hit_way_o, // we've got a hit on the corresponding way
-
-
-        output logic                [DCACHE_SET_ASSOC-1:0]   req_o,
-        output logic                [ADDR_WIDTH-1:0]         addr_o,
-        output data_t                                        wdata_o,
-        output logic                                         we_o,
-        output be_t                                          be_o,
-        input  data_t               [DCACHE_SET_ASSOC-1:0]   rdata_i
-    );
-
-    assign rdata_o = rdata_i;
-    // one hot encoded
-    logic [NR_PORTS-1:0] id_d, id_q;
-    logic [DCACHE_TAG_WIDTH-1:0] sel_tag;
-
-    always_comb begin : tag_sel
-        sel_tag = '0;
-        for (int unsigned i = 0; i < NR_PORTS; i++)
-            if (id_q[i])
-                sel_tag = tag_i[i];
-    end
-
-    for (genvar j = 0; j < DCACHE_SET_ASSOC; j++) begin : tag_cmp
-        assign hit_way_o[j] = (sel_tag == rdata_i[j].tag) ? rdata_i[j].valid : 1'b0;
-    end
-
-    always_comb begin
-
-        gnt_o     = '0;
-        id_d      = '0;
-        wdata_o   = '0;
-        req_o     = '0;
-        addr_o    = '0;
-        be_o      = '0;
-        we_o      = '0;
-        // Request Side
-        // priority select
-        for (int unsigned i = 0; i < NR_PORTS; i++) begin
-            req_o    = req_i[i];
-            id_d     = (1'b1 << i);
-            gnt_o[i] = 1'b1;
-            addr_o   = addr_i[i];
-            be_o     = be_i[i];
-            we_o     = we_i[i];
-            wdata_o  = wdata_i[i];
-
-            if (req_i[i])
-                break;
-        end
-
-        `ifndef SYNTHESIS
-        `ifndef VERILATOR
-        // assert that cache only hits on one way
-        assert property (
-          @(posedge clk_i) $onehot0(hit_way_o)) else begin $error("Hit should be one-hot encoded"); $stop(); end
-        `endif
-        `endif
-    end
-
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (~rst_ni) begin
-            id_q <= 0;
-        end else begin
-            id_q <= id_d;
-        end
-    end
-
+//pragma translate_on
 endmodule

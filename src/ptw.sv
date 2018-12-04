@@ -31,7 +31,7 @@ module ptw #(
     input  logic                    en_ld_st_translation_i, // enable virtual memory translation for load/stores
 
     input  logic                    lsu_is_store_i,         // this translation was triggered by a store
-    // PTW memory interface 
+    // PTW memory interface
     input  dcache_req_o_t           req_port_i,
     output dcache_req_i_t           req_port_o,
 
@@ -60,8 +60,6 @@ module ptw #(
     output logic                    dtlb_miss_o
 
 );
-
-    assign req_port_o.amo_op = AMO_NONE;
 
     // input registers
     logic data_rvalid_q;
@@ -101,8 +99,8 @@ module ptw #(
     assign ptw_active_o    = (state_q != IDLE);
     assign walking_instr_o = is_instr_ptw_q;
     // directly output the correct physical address
-    assign req_port_o.address_index = ptw_pptr_q[11:0];
-    assign req_port_o.address_tag   = ptw_pptr_q[55:12];
+    assign req_port_o.address_index = ptw_pptr_q[DCACHE_INDEX_WIDTH-1:0];
+    assign req_port_o.address_tag   = ptw_pptr_q[DCACHE_INDEX_WIDTH+DCACHE_TAG_WIDTH-1:DCACHE_INDEX_WIDTH];
     // we are never going to kill this request
     assign req_port_o.kill_req      = '0;
     // we are never going to write with the HPTW
@@ -165,10 +163,10 @@ module ptw #(
         ptw_pptr_n            = ptw_pptr_q;
         state_d               = state_q;
         global_mapping_n      = global_mapping_q;
-        // input registers  
+        // input registers
         tlb_update_asid_n     = tlb_update_asid_q;
         vaddr_n               = vaddr_q;
-  
+
         itlb_miss_o           = 1'b0;
         dtlb_miss_o           = 1'b0;
 
