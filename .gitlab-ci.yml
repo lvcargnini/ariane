@@ -28,8 +28,8 @@ variables:
 
 stages:
   - build
-  - standard
-  - serpent
+  - write-back
+  - write-through
 
 ###################################
 # prepare
@@ -46,78 +46,93 @@ build:
         - tmp
 
 ###################################
-# tests with standard cache system
+# tests with write-back cache system
 
 # rv64ui-p-* and rv64ui-v-* tests
 asm-quest:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-asm-tests batch-mode=1
+    - make -j${NUM_JOBS} run-asm-tests batch-mode=1 defines=WB_DCACHE
   dependencies:
     - build
 
 amo-quest:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-amo-tests batch-mode=1
+    - make -j${NUM_JOBS} run-amo-tests batch-mode=1 defines=WB_DCACHE
   dependencies:
     - build
 
+# fp-quest:
+#   stage: write-back
+#   script:
+#     - make -j${NUM_JOBS} run-fp-tests batch-mode=1 defines=WB_DCACHE
+#   dependencies:
+#     - build
+
 bench-quest:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-benchmarks batch-mode=1
+    - make -j${NUM_JOBS} run-benchmarks batch-mode=1 defines=WB_DCACHE
   dependencies:
     - build
 
 # rv64ui-p-* tests
 asm1-ver:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-asm-tests1-verilator
+    - make -j${NUM_JOBS} run-asm-tests1-verilator defines=WB_DCACHE
   dependencies:
     - build
 
 # rv64ui-v-* tests
 asm2-ver:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-asm-tests2-verilator
+    - make -j${NUM_JOBS} run-asm-tests2-verilator defines=WB_DCACHE
   dependencies:
     - build
 
 # rv64um-*-* tests
 mul-ver:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-mul-verilator
+    - make -j${NUM_JOBS} run-mul-verilator defines=WB_DCACHE
   dependencies:
     - build
 
 # atomics
 amo-ver:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-amo-verilator
+    - make -j${NUM_JOBS} run-amo-verilator defines=WB_DCACHE
+  dependencies:
+    - build
+
+# floating point
+# fp-ver:
+#   stage: write-back
+#   script:
+#     - make -j${NUM_JOBS} run-fp-verilator defines=WB_DCACHE
+#   dependencies:
+#     - build
+
+bench-ver:
+  stage: write-back
+  script:
+    - make -j${NUM_JOBS} run-benchmarks-verilator defines=WB_DCACHE
   dependencies:
     - build
 
 bench-ver:
-  stage: standard
+  stage: write-back
   script:
-    - make -j${NUM_JOBS} run-benchmarks-verilator
-  dependencies:
-    - build
-
-bench-ver:
-  stage: standard
-  script:
-    - make -j${NUM_JOBS} run-benchmarks-verilator
+    - make -j${NUM_JOBS} run-benchmarks-verilator defines=WB_DCACHE
   dependencies:
     - build
 
 # torture:
-#   stage: standard
+#   stage: write-back
 #   script:
 #     - make torture-rtest batch-mode=1
 #     - make torture-rtest-verilator
@@ -125,7 +140,7 @@ bench-ver:
 #     - build
 
 serdiv-quest:
-  stage: standard
+  stage: write-back
   script:
     - cd tb/tb_serdiv/
     - make simc
@@ -134,65 +149,96 @@ serdiv-quest:
     - build
 
 ###################################
-# tests with serpent cache system
+# tests with write-through cache system
 
-# rv64ui-p-* and rv64ui-v-* tests
 s-asm-quest:
-  stage: serpent
+  stage: write-through
   script:
-    - make -j${NUM_JOBS} run-asm-tests defines=PITON_ARIANE+AXI64_CACHE_PORTS batch-mode=1
+    - make -j${NUM_JOBS} run-asm-tests defines=WT_DCACHE batch-mode=1
   dependencies:
     - build
 
-s-bench-quest:
-  stage: serpent
+# atomics
+s-amo-quest:
+  stage: write-through
   script:
-    - make -j${NUM_JOBS} run-benchmarks defines=PITON_ARIANE+AXI64_CACHE_PORTS batch-mode=1
+    - make -j${NUM_JOBS} run-amo-tests defines=WT_DCACHE batch-mode=1
+  dependencies:
+    - build
+
+# floating point
+# s-fp-quest:
+#   stage: write-through
+#   script:
+#     - make -j${NUM_JOBS} run-fp-tests defines=WT_DCACHE batch-mode=1
+#   dependencies:
+#     - build
+
+s-bench-quest:
+  stage: write-through
+  script:
+    - make -j${NUM_JOBS} run-benchmarks defines=WT_DCACHE batch-mode=1
   dependencies:
     - build
 
 # rv64ui-p-* tests
 s-asm1-ver:
-  stage: serpent
+  stage: write-through
   script:
-    - make -j${NUM_JOBS} run-asm-tests1-verilator defines=PITON_ARIANE+AXI64_CACHE_PORTS
+    - make -j${NUM_JOBS} run-asm-tests1-verilator defines=WT_DCACHE
   dependencies:
     - build
 
 # rv64ui-v-* tests
 s-asm2-ver:
-  stage: serpent
+  stage: write-through
   script:
-    - make -j${NUM_JOBS} run-asm-tests2-verilator defines=PITON_ARIANE+AXI64_CACHE_PORTS
+    - make -j${NUM_JOBS} run-asm-tests2-verilator defines=WT_DCACHE
   dependencies:
     - build
 
 # rv64um-*-* tests
 mul-ver:
-  stage: standard
+  stage: write-through
   script:
-    - make -j${NUM_JOBS} run-mul-verilator defines=PITON_ARIANE+AXI64_CACHE_PORTS
+    - make -j${NUM_JOBS} run-mul-verilator defines=WT_DCACHE
   dependencies:
     - build
 
-s-bench-ver:
-  stage: serpent
+# atomics
+amo-ver:
+  stage: write-through
   script:
-    - make -j${NUM_JOBS} run-benchmarks-verilator defines=PITON_ARIANE+AXI64_CACHE_PORTS
+    - make -j${NUM_JOBS} run-amo-verilator defines=WT_DCACHE
+  dependencies:
+    - build
+
+# floating point
+# s-fp-ver:
+#   stage: write-through
+#   script:
+#     - make -j${NUM_JOBS} run-fp-verilator defines=WT_DCACHE
+#   dependencies:
+#     - build
+
+s-bench-ver:
+  stage: write-through
+  script:
+    - make -j${NUM_JOBS} run-benchmarks-verilator defines=WT_DCACHE
   dependencies:
     - build
 
 s-icache-quest:
-  stage: serpent
+  stage: write-through
   script:
-    - cd tb/tb_serpent_icache/
+    - cd tb/tb_wt_icache/
     - make simc
     - "grep 'CI: PASSED' summary.rep"
 
 s-dcache-quest:
-  stage: serpent
+  stage: write-through
   script:
-    - cd tb/tb_serpent_dcache/
+    - cd tb/tb_wt_dcache/
     - make simc
     - "grep 'CI: PASSED' RD0_summary.rep"
     - "grep 'CI: PASSED' RD1_summary.rep"
@@ -201,9 +247,9 @@ s-dcache-quest:
     - build
 
 # s-torture:
-#   stage: serpent
+#   stage: write-through
 #   script:
-#     - make torture-rtest           defines=PITON_ARIANE+AXI64_CACHE_PORTS batch-mode=1
-#     - make torture-rtest-verilator defines=PITON_ARIANE+AXI64_CACHE_PORTS
+#     - make torture-rtest           defines=WT_DCACHE batch-mode=1
+#     - make torture-rtest-verilator defines=WT_DCACHE
 #   dependencies:
 #     - build

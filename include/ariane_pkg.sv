@@ -20,9 +20,7 @@
 // configuration in case Ariane is
 // instantiated in OpenPiton
 `ifdef PITON_ARIANE
-`ifndef AXI64_CACHE_PORTS
   `include "l15.tmp.h"
-`endif
 `endif
 
 package ariane_pkg;
@@ -51,19 +49,26 @@ package ariane_pkg;
     // depth of store-buffers, this needs to be a power of two
     localparam int unsigned DEPTH_SPEC   = 4;
 
-`ifdef PITON_ARIANE
+`ifdef WT_DCACHE
     // in this case we can use a small commit queue since we have a write buffer in the dcache
     // we could in principle do without the commit queue in this case, but the timing degrades if we do that due
     // to longer paths into the commit stage
-    localparam int unsigned DEPTH_COMMIT = 2;
+    localparam int unsigned DEPTH_COMMIT = 4;
 `else
     // allocate more space for the commit buffer to be on the save side, this needs to be a power of two
     localparam int unsigned DEPTH_COMMIT = 8;
 `endif
 
+
+`ifdef PITON_ARIANE
     // Floating-point extensions configuration
     localparam bit RVF = 1'b0; // Is F extension enabled
     localparam bit RVD = 1'b0; // Is D extension enabled
+`else
+    // Floating-point extensions configuration
+    localparam bit RVF = 1'b0; // Is F extension enabled
+    localparam bit RVD = 1'b0; // Is D extension enabled
+`endif
     localparam bit RVA = 1'b1; // Is A extension enabled
 
     // Transprecision floating-point extensions configuration
@@ -73,14 +78,14 @@ package ariane_pkg;
     localparam bit XFVEC   = 1'b0; // Is vectorial float extension (Xfvec) enabled
 
     // Transprecision float unit
-    localparam logic [30:0] LAT_COMP_FP32    = 'd3;
-    localparam logic [30:0] LAT_COMP_FP64    = 'd4;
-    localparam logic [30:0] LAT_COMP_FP16    = 'd3;
-    localparam logic [30:0] LAT_COMP_FP16ALT = 'd3;
-    localparam logic [30:0] LAT_COMP_FP8     = 'd2;
-    localparam logic [30:0] LAT_DIVSQRT      = 'd2;
-    localparam logic [30:0] LAT_NONCOMP      = 'd1;
-    localparam logic [30:0] LAT_CONV         = 'd2;
+    localparam int unsigned LAT_COMP_FP32    = 'd2;
+    localparam int unsigned LAT_COMP_FP64    = 'd3;
+    localparam int unsigned LAT_COMP_FP16    = 'd1;
+    localparam int unsigned LAT_COMP_FP16ALT = 'd1;
+    localparam int unsigned LAT_COMP_FP8     = 'd1;
+    localparam int unsigned LAT_DIVSQRT      = 'd2;
+    localparam int unsigned LAT_NONCOMP      = 'd1;
+    localparam int unsigned LAT_CONV         = 'd2;
 
     // --------------------------------------
     // vvvv Don't change these by hand! vvvv
@@ -139,14 +144,19 @@ package ariane_pkg;
     // where coherence is not necessary this can improve performance. This needs to be switched on
     // when more than one core is in a system
     localparam logic INVALIDATE_ON_FLUSH = 1'b1;
+`ifdef SPIKE_TANDEM
     // enable performance cycle counter, if set to zero mcycle will be incremented
     // with instret (non RISC-V conformal)
-    localparam bit ENABLE_CYCLE_COUNT = 1'b1;
+    localparam bit ENABLE_CYCLE_COUNT = 1'b0;
     // mark WIF as nop
-    localparam bit ENABLE_WFI = 1'b1;
+    localparam bit ENABLE_WFI = 1'b0;
     // Spike zeros tval on all exception except memory faults
+    localparam bit ZERO_TVAL = 1'b1;
+`else
+    localparam bit ENABLE_CYCLE_COUNT = 1'b1;
+    localparam bit ENABLE_WFI = 1'b1;
     localparam bit ZERO_TVAL = 1'b0;
-
+`endif
     // read mask for SSTATUS over MMSTATUS
     localparam logic [63:0] SMODE_STATUS_READ_MASK = riscv::SSTATUS_UIE
                                                    | riscv::SSTATUS_SIE
@@ -261,9 +271,7 @@ package ariane_pkg;
     // Cache config
     // ---------------
 
-    // if serpent pulp is used standalone (outside of openpiton)
-    // we just use the default config of ariane
-    // otherwise we have to propagate the openpiton L15 configuration from l15.h
+// for usage in OpenPiton we have to propagate the openpiton L15 configuration from l15.h
 `ifdef PITON_ARIANE
 
 `ifndef CONFIG_L1I_CACHELINE_WIDTH
@@ -283,11 +291,11 @@ package ariane_pkg;
 `endif
 
 `ifndef CONFIG_L1D_ASSOCIATIVITY
-    `define CONFIG_L1D_ASSOCIATIVITY 4
+    `define CONFIG_L1D_ASSOCIATIVITY 8
 `endif
 
 `ifndef CONFIG_L1D_SIZE
-    `define CONFIG_L1D_SIZE 16*1024
+    `define CONFIG_L1D_SIZE 32*1024
 `endif
 
     // I$
