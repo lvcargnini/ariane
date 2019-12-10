@@ -11,9 +11,7 @@
 // Description: Set global FPGA degines
 // Author: Florian Zaruba <zarubaf@iis.ee.ethz.ch>
 
-`define GENESYSII
-// include KINTEX7 specific code (relevant for KC705, GENESYSII,...)
-`define KINTEX7
+`define VC707
 
 `define ARIANE_DATA_WIDTH 64
 
